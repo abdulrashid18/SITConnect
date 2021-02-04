@@ -74,6 +74,10 @@ namespace SITConnect
             {
                 lb_error.Text = "Userid or password is not valid. Please try again.";
             }
+            else if (Request.QueryString["error"] == "lockout")
+            {
+                lb_error.Text = "The account has been locked out";
+            }
         }
 
         protected void btn_login_Click(object sender, EventArgs e)
@@ -83,46 +87,55 @@ namespace SITConnect
             SHA512Managed hashing = new SHA512Managed();
             string dbHash = getDBHash(email);
             string dbSalt = getDBSalt(email);
-            try
+            if (accountstat(email) == "1")
             {
-                if (dbSalt != null && dbSalt.Length > 0 && dbHash != null && dbHash.Length > 0)
+                try
                 {
-                    string pwdWithSalt = pwd + dbSalt;
-                    byte[] hashWithSalt = hashing.ComputeHash(Encoding.UTF8.GetBytes(pwdWithSalt));
-                    string userHash = Convert.ToBase64String(hashWithSalt);
-
-                    if (ValidateCaptcha())
+                    if (dbSalt != null && dbSalt.Length > 0 && dbHash != null && dbHash.Length > 0)
                     {
-                        if (userHash.Equals(dbHash))
+                        string pwdWithSalt = pwd + dbSalt;
+                        byte[] hashWithSalt = hashing.ComputeHash(Encoding.UTF8.GetBytes(pwdWithSalt));
+                        string userHash = Convert.ToBase64String(hashWithSalt);
+
+                        if (ValidateCaptcha())
                         {
-                            //For session Fixation attacks
-                            Session["LoggedIn"] = tb_email.Text.Trim();
+                            if (userHash.Equals(dbHash))
+                            {
+                                //For session Fixation attacks
+                                Session["LoggedIn"] = tb_email.Text.Trim();
 
-                            //creates a new GUID and save into session
-                            string guid = Guid.NewGuid().ToString();
-                            Session["AuthToken"] = guid;
+                                //creates a new GUID and save into session
+                                string guid = Guid.NewGuid().ToString();
+                                Session["AuthToken"] = guid;
 
-                            //now creates a new cookie with this guid value
-                            Response.Cookies.Add(new HttpCookie("AuthToken", guid));
+                                //now creates a new cookie with this guid value
+                                Response.Cookies.Add(new HttpCookie("AuthToken", guid));
 
-                            //Response.Redirect("SuccessLogin.aspx", false);
-                            Response.Redirect("SuccessLogin.aspx", false);
-                        }
-                    }
+                                //Response.Redirect("SuccessLogin.aspx", false);
+                                Response.Redirect("SuccessLogin.aspx", false);
+                            }
 
-                    else
-                    {
-                        //lb_error.Text = "Userid or password is not valid. Please try again.";
-                        Response.Redirect("Login.aspx?error=error", false);
+                            else
+                            {
+                                Response.Redirect("Login.aspx?error=error", false);
+                                //lb_error.Text = "Userid or password is not valid. Please try again.";
+                                Session["LoginAttempted"] = Convert.ToInt32(Session["LoginAttempted"]) + 1;
+                                if (Convert.ToInt32(Session["LoginAttempted"]) >= 3)
+                                {
+                                    Response.Redirect("Login.aspx?error=lockout", false);
+                                    accountlockout(email);
+                                }
+                            }
+                        }  
                     }
                 }
-            }
 
-            catch (Exception ex)
-            {
-                throw new Exception(ex.ToString());
+                catch (Exception ex)
+                {
+                    throw new Exception(ex.ToString());
+                }
+                finally { }
             }
-            finally { }
         }
 
         protected string getDBHash(string email)
@@ -187,6 +200,58 @@ namespace SITConnect
             }
             finally { connection.Close(); }
             return s;
+        }
+
+        protected string accountstat(string email)
+        {
+            string t = "1";
+            SqlConnection connection = new SqlConnection(MYDBConnectionString);
+            string sql = "select AccountStat FROM Account WHERE Email=@email";
+            SqlCommand command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@email", email);
+            try
+            {
+                connection.Open();
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        if (reader["AccountStat"] != null)
+                        {
+                            if (reader["AccountStat"] != DBNull.Value)
+                            {
+                                t = reader["AccountStat"].ToString();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.ToString());
+            }
+            finally { connection.Close(); }
+            return t;
+        }
+
+        protected string accountlockout(string email)
+        {
+
+            SqlConnection connection = new SqlConnection(MYDBConnectionString);
+            string sql = "UPDATE Account SET AccountStat=0 WHERE Email=@email";
+            SqlCommand command = new SqlCommand(sql, connection);
+            command.Parameters.AddWithValue("@email", email);
+            try
+            {
+                connection.Open();
+                command.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(ex.ToString());
+            }
+            finally { connection.Close(); }
+            return null;
         }
     }
 }

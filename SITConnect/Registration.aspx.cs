@@ -167,7 +167,7 @@ namespace SITConnect
             {
                 using (SqlConnection con = new SqlConnection(MYDBConnectionString))
                 {
-                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Account VALUES(@Email, @First, @Last, @Credit, @Expiry, @CVV, @PasswordHash, @PasswordSalt, @DOB, @DateTimeRegistered)"))
+                    using (SqlCommand cmd = new SqlCommand("INSERT INTO Account VALUES(@Email, @First, @Last, @Credit, @Expiry, @CVV, @PasswordHash, @PasswordSalt, @DOB, @AccountStat, @DateTimeRegistered)"))
                     {
                         using (SqlDataAdapter sda = new SqlDataAdapter())
                         {
@@ -181,6 +181,7 @@ namespace SITConnect
                             cmd.Parameters.AddWithValue("@PasswordHash", finalHash);
                             cmd.Parameters.AddWithValue("@PasswordSalt", salt);
                             cmd.Parameters.AddWithValue("@DOB", dt);
+                            cmd.Parameters.AddWithValue("@AccountStat", 1);
                             cmd.Parameters.AddWithValue("@DateTimeRegistered", DateTime.Now);
                             cmd.Connection = con;
                             try
